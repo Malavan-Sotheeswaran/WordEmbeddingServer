@@ -43,9 +43,15 @@ impl Server {
                     }
                     self.conns.retain_mut(|conn| {
                         let mut deleted = false;
-                        match conn.stream.read_to_string(&mut conn.buf) {
+                        let mut buf : [u8; 1024] = [0; 1024];
+                        match conn.stream.read(&mut buf) {
                             Ok(bytes_read) => if bytes_read == 0 {
                                 deleted = true;
+                            } else {
+                                match std::str::from_utf8(&buf[0..bytes_read]) {
+                                    Ok(read) => conn.buf.push_str(read),
+                                    Err(e) => println!("Error saving data read from client: {e:?}")
+                                }
                             }
                             Err(e) => {
                                 println!("Error reading from connection {e:?}");
