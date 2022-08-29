@@ -2,7 +2,6 @@ use std::{
     io::{prelude::*, ErrorKind},
     net::{TcpListener, TcpStream},
     collections::HashMap,
-    time::{SystemTime, Duration},
 };
 
 struct Connection {
@@ -20,9 +19,8 @@ impl Server {
     pub fn start(mut self) {
         match TcpListener::bind(&self.bind_addr) {
             Ok(listener) => {
-                listener.set_nonblocking(true);
+                listener.set_nonblocking(true).expect("Error setting listener to nonblocking");
                 loop {
-                    let start = SystemTime::now();
                     for _ in 1..100 {
                         match listener.accept() {
                             Ok((stream, client)) => {
@@ -35,10 +33,6 @@ impl Server {
                             Err(e) => if e.kind() != ErrorKind::WouldBlock {
                                 println!("Error accepting connection: {e:?}")
                             }
-                        }
-                        match start.elapsed() {
-                            Ok(elapsed) => if elapsed > Duration::from_millis(1000) { break; },
-                            Err(e) => println!("Error checking time spent waiting for conns: {e:?}")
                         }
                     }
                     self.conns.retain_mut(|conn| {
