@@ -76,6 +76,12 @@ impl Server {
                                         if let Some((key, rest)) = key.split_once(' ') {
                                             println!("Request to set {key:?} to {rest:?}");
                                             self.key_embed_map.insert(String::from(key), String::from(rest));
+                                            match conn.stream.write("OK\r\n".as_bytes()) {
+                                                Ok(_writen) => {
+    
+                                                },
+                                                Err(e) => println!("Error writing to connection {e:?}")
+                                            }
                                         }
                                     },
                                     "get" => {
@@ -84,7 +90,12 @@ impl Server {
                                             Some(embed) => {
                                                 match conn.stream.write(embed.as_bytes()) {
                                                     Ok(_writen) => {
-        
+                                                        match conn.stream.write("\r\n".as_bytes()) {
+                                                            Ok(_writen) => {
+                
+                                                            },
+                                                            Err(e) => println!("Error writing to connection {e:?}")
+                                                        }
                                                     },
                                                     Err(e) => println!("Error writing to connection {e:?}")
                                                 }
@@ -102,9 +113,15 @@ impl Server {
                                     "del" => {
                                         println!("Request to delete {key:?}");
                                         self.key_embed_map.remove(key);
+                                        match conn.stream.write("OK\r\n".as_bytes()) {
+                                            Ok(_writen) => {
+
+                                            },
+                                            Err(e) => println!("Error writing to connection {e:?}")
+                                        }
                                     },
                                     _ => {
-                                        println!("Bad command: {command:?}");
+                                        println!("Unknown command: {command:?}");
                                     }
                                 }
                             } else {
