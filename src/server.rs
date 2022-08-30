@@ -24,7 +24,9 @@ impl Server {
         match TcpListener::bind(&self.bind_addr) {
             Ok(listener) => {
                 listener.set_nonblocking(true).expect("Error setting listener to nonblocking");
+                //main event loop
                 loop {
+                    //accept new clients
                     for _ in 1..MAX_ACCEPTS_PER_CYCLE {
                         match listener.accept() {
                             Ok((stream, client)) => {
@@ -39,6 +41,8 @@ impl Server {
                             }
                         }
                     }
+
+                    //check client state
                     self.conns.retain_mut(|conn| {
                         if conn.buf.len() > MAX_READ_BUF_SIZE {
                             return false;
@@ -60,11 +64,52 @@ impl Server {
                         }
                         return true;
                     });
+
+                    //check client buffers for commands
                     for conn in &mut self.conns {
                         if let Some(idx) = conn.buf.find("\r\n") {
-                            let mut command: String = conn.buf.drain(..idx+2).collect::<String>();
-                            command.truncate(idx);
-                            println!("Got command: {command:?}");
+                            let mut full_command: String = conn.buf.drain(..idx+2).collect::<String>();
+                            full_command.truncate(idx);
+                            if let Some((command,key)) = full_command.split_once(' ') {
+                                match command {
+                                    "put" => {
+                                        if let Some((key, rest)) = key.split_once(' ') {
+                                            println!("Request to set {key:?} to {rest:?}");
+                                            self.key_embed_map.insert(String::from(key), String::from(rest));
+                                        }
+                                    },
+                                    "get" => {
+                                        println!("Request for {key:?}");
+                                        match self.key_embed_map.get(key) {
+                                            Some(embed) => {
+                                                match conn.stream.write(embed.as_bytes()) {
+                                                    Ok(_writen) => {
+        
+                                                    },
+                                                    Err(e) => println!("Error writing to connection {e:?}")
+                                                }
+                                            }
+                                            None => {
+                                                match conn.stream.write("(none)".as_bytes()) {
+                                                    Ok(_writen) => {
+        
+                                                    },
+                                                    Err(e) => println!("Error writing to connection {e:?}")
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "del" => {
+                                        println!("Request to delete {key:?}");
+                                        self.key_embed_map.remove(key);
+                                    },
+                                    _ => {
+                                        println!("Bad command: {command:?}");
+                                    }
+                                }
+                            } else {
+                                println!("Invalid input: {full_command:?}");
+                            }
                         }
                     }
                 }
