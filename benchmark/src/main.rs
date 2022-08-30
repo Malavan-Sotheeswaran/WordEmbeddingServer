@@ -5,7 +5,7 @@ use std::{
 
 fn main() {
     if let Ok(mut stream) = TcpStream::connect("127.0.0.1:7487") {
-        let string = "Hi!";
+        let string = "Hi!\r\n";
         loop {
             if let Ok(written) = stream.write(string.as_bytes()) {
                 println!("Wrote {written:?} to server");

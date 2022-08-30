@@ -1,3 +1,7 @@
+const MAX_ACCEPTS_PER_CYCLE: usize = 100;
+const TEMP_READ_BUF_SIZE: usize = 1024;
+const MAX_READ_BUF_SIZE: usize = 4096;
+
 use std::{
     io::{prelude::*, ErrorKind},
     net::{TcpListener, TcpStream},
@@ -21,7 +25,7 @@ impl Server {
             Ok(listener) => {
                 listener.set_nonblocking(true).expect("Error setting listener to nonblocking");
                 loop {
-                    for _ in 1..100 {
+                    for _ in 1..MAX_ACCEPTS_PER_CYCLE {
                         match listener.accept() {
                             Ok((stream, client)) => {
                                 println!("Accepted connection from: {client:?}");
@@ -36,11 +40,13 @@ impl Server {
                         }
                     }
                     self.conns.retain_mut(|conn| {
-                        let mut deleted = false;
-                        let mut buf : [u8; 1024] = [0; 1024];
+                        if conn.buf.len() > MAX_READ_BUF_SIZE {
+                            return false;
+                        }
+                        let mut buf : [u8; TEMP_READ_BUF_SIZE] = [0; TEMP_READ_BUF_SIZE];
                         match conn.stream.read(&mut buf) {
                             Ok(bytes_read) => if bytes_read == 0 {
-                                deleted = true;
+                                return false;
                             } else {
                                 match std::str::from_utf8(&buf[0..bytes_read]) {
                                     Ok(read) => conn.buf.push_str(read),
@@ -49,14 +55,17 @@ impl Server {
                             }
                             Err(e) => {
                                 println!("Error reading from connection {e:?}");
-                                deleted = true;
+                                return false;
                             }
                         }
-                        !deleted
+                        return true;
                     });
-                    for conn in &self.conns {
-                        let msg = &conn.buf;
-                        println!("Got: {msg:?}");
+                    for conn in &mut self.conns {
+                        if let Some(idx) = conn.buf.find("\r\n") {
+                            let mut command: String = conn.buf.drain(..idx+2).collect::<String>();
+                            command.truncate(idx);
+                            println!("Got command: {command:?}");
+                        }
                     }
                 }
             }
