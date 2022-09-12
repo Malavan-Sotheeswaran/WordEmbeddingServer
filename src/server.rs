@@ -78,9 +78,9 @@ impl Server {
                                     "put" => {
                                         if let Some((key, rest)) = key.split_once(' ') {
                                             println!("Request to set {key:?} to {rest:?}");
-                                            match self.model.encode(rest) {
+                                            match self.model.encode(&[rest]) {
                                                 Ok(embedding) => {
-                                                    self.key_embed_map.insert(String::from(key), format!("embedding:?"));
+                                                    self.key_embed_map.insert(String::from(key), format!("{embedding:?}"));
                                                 },
                                                 Err(e) => {
                                                     println!("Failed computing embedding {e:?}");
