@@ -8,6 +8,8 @@ use std::{
     collections::HashMap,
 };
 
+use rust_bert::pipelines::sentence_embeddings::{SentenceEmbeddingsBuilder, SentenceEmbeddingsModel, SentenceEmbeddingsModelType};
+
 struct Connection {
     pub stream: TcpStream,
     pub buf: String,
@@ -17,6 +19,7 @@ pub struct Server {
     bind_addr: String,
     key_embed_map: HashMap<String, String>,
     conns: Vec<Connection>,
+    model: SentenceEmbeddingsModel,
 }
 
 impl Server {
@@ -75,7 +78,20 @@ impl Server {
                                     "put" => {
                                         if let Some((key, rest)) = key.split_once(' ') {
                                             println!("Request to set {key:?} to {rest:?}");
-                                            self.key_embed_map.insert(String::from(key), String::from(rest));
+                                            match self.model.encode(rest) {
+                                                Ok(embedding) => {
+                                                    self.key_embed_map.insert(String::from(key), format!("embedding:?"));
+                                                },
+                                                Err(e) => {
+                                                    println!("Failed computing embedding {e:?}");
+                                                    match conn.stream.write("FAIL\r\n".as_bytes()) {
+                                                        Ok(_writen) => {
+            
+                                                        },
+                                                        Err(e) => println!("Error writing to connection {e:?}")
+                                                    }
+                                                }
+                                            }
                                             match conn.stream.write("OK\r\n".as_bytes()) {
                                                 Ok(_writen) => {
     
@@ -135,11 +151,15 @@ impl Server {
         }
     }
 
-    pub fn new(bind_addr: String) -> Server {
-        Server {
+    pub fn new(bind_addr: String) -> Result<Server, rust_bert::RustBertError> {
+        let model = SentenceEmbeddingsBuilder::remote(SentenceEmbeddingsModelType::DistiluseBaseMultilingualCased)
+        .with_device(tch::Device::cuda_if_available())
+        .create_model()?;
+        Ok(Server {
             bind_addr: bind_addr,
             key_embed_map: HashMap::new(),
             conns: Vec::new(),
-        }
+            model: model,
+        })
     }
 }
