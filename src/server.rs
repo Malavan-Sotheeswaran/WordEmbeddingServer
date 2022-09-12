@@ -117,7 +117,7 @@ impl Server {
                                                 }
                                             }
                                             None => {
-                                                match conn.stream.write("(none)".as_bytes()) {
+                                                match conn.stream.write("NONE\r\n".as_bytes()) {
                                                     Ok(_writen) => {
         
                                                     },
