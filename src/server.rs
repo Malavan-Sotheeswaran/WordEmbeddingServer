@@ -138,6 +138,12 @@ impl Server {
                                     },
                                     _ => {
                                         println!("Unknown command: {command:?}");
+                                        match conn.stream.write("UNKNOWN COMMAND\r\n".as_bytes()) {
+                                            Ok(_writen) => {
+
+                                            },
+                                            Err(e) => println!("Error writing to connection {e:?}")
+                                        }
                                     }
                                 }
                             } else {
