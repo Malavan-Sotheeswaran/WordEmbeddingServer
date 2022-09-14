@@ -6,6 +6,7 @@ use std::{
     collections::HashMap,
     io::{prelude::*, ErrorKind},
     net::{TcpListener, TcpStream},
+    sync::{Arc, RwLock},
 };
 
 use rust_bert::pipelines::sentence_embeddings::{
@@ -17,14 +18,26 @@ struct Connection {
     pub buf: String,
 }
 
-pub struct Server {
-    bind_addr: String,
+pub struct ServerData {
     key_embed_map: HashMap<String, String>,
+}
+
+pub struct ServerThread {
+    bind_addr: String,
+    data: Arc<RwLock<ServerData>>,
     conns: Vec<Connection>,
     model: SentenceEmbeddingsModel,
 }
 
-impl Server {
+impl ServerData {
+    pub fn new() -> ServerData {
+        ServerData {
+            key_embed_map: HashMap::new(),
+        }
+    }
+}
+
+impl ServerThread {
     pub fn start(mut self) {
         match TcpListener::bind(&self.bind_addr) {
             Ok(listener) => {
@@ -91,7 +104,8 @@ impl Server {
                                             println!("Request to set {key:?} to {rest:?}");
                                             match self.model.encode(&[rest]) {
                                                 Ok(embedding) => {
-                                                    self.key_embed_map.insert(
+                                                    let mut data = self.data.write().unwrap();
+                                                    data.key_embed_map.insert(
                                                         String::from(key),
                                                         format!("{embedding:?}"),
                                                     );
@@ -116,7 +130,8 @@ impl Server {
                                     }
                                     "get" => {
                                         println!("Request for {key:?}");
-                                        match self.key_embed_map.get(key) {
+                                        let data = self.data.read().unwrap();
+                                        match data.key_embed_map.get(key) {
                                             Some(embed) => {
                                                 match conn.stream.write(embed.as_bytes()) {
                                                     Ok(_writen) => {
@@ -144,7 +159,10 @@ impl Server {
                                     }
                                     "del" => {
                                         println!("Request to delete {key:?}");
-                                        self.key_embed_map.remove(key);
+                                        {
+                                            let mut data = self.data.write().unwrap();
+                                            data.key_embed_map.remove(key);
+                                        }
                                         match conn.stream.write("OK\r\n".as_bytes()) {
                                             Ok(_writen) => {}
                                             Err(e) => println!("Error writing to connection {e:?}"),
@@ -169,15 +187,18 @@ impl Server {
         }
     }
 
-    pub fn new(bind_addr: String) -> Result<Server, rust_bert::RustBertError> {
+    pub fn new(
+        bind_addr: String,
+        data: Arc<RwLock<ServerData>>,
+    ) -> Result<ServerThread, rust_bert::RustBertError> {
         let model = SentenceEmbeddingsBuilder::remote(
             SentenceEmbeddingsModelType::DistiluseBaseMultilingualCased,
         )
         .with_device(tch::Device::cuda_if_available())
         .create_model()?;
-        Ok(Server {
+        Ok(ServerThread {
             bind_addr: bind_addr,
-            key_embed_map: HashMap::new(),
+            data: data,
             conns: Vec::new(),
             model: model,
         })
